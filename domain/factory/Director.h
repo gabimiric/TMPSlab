@@ -7,7 +7,7 @@ class Director {
 public:
     // Standard full build - all components
     void constructFullPC(PCBuilder& builder) {
-        cout << "Director: Building full PC configuration..." << endl;
+        cout << "Building PC..." << endl;
         builder.buildCPU();
         builder.buildGPU();
         builder.buildRAM();
