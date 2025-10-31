@@ -1,30 +1,33 @@
 #pragma once
 #include <iostream>
-#include <vector>
-#include "../domain/Component.h"
+#include <string>
+#include "models/GPU.h"
 using namespace std;
 
 class PC {
 private:
-    vector<Component*> components;
     string type;
+    string cpu;
+    string ram;
+    GPU* gpu;
 
 public:
-    PC(const string& t) : type(t) {}
+    PC(const string& t) : type(t), gpu(nullptr) {}
 
-    void addComponent(Component* c) {
-        components.push_back(c);
-    }
+    void setCPU(const string& c) { cpu = c; }
+    void setRAM(const string& r) { ram = r; }
+    void setGPU(GPU* g) { gpu = g; }
 
     void showSpecs() const {
         cout << "\n--- " << type << " Specifications ---" << endl;
-        for (auto c : components)
-            c->show();
+        cout << "CPU: " << cpu << endl;
+        cout << "RAM: " << ram << endl;
+        if (gpu)
+            gpu->show();
         cout << "-------------------------------" << endl;
     }
 
     ~PC() {
-        for (auto c : components)
-            delete c;
+        delete gpu;
     }
 };
