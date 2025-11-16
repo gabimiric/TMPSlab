@@ -19,7 +19,7 @@ public:
     string connect8Pin() {
         return "8-pin connector (" + to_string(powerRating) + "W)";
     }
-    int getPower() const { return powerRating; }
+    int getPowerRating() const { return powerRating; }
 };
 
 // ADAPTER PATTERN: Converts two 8-pin to 12-pin
@@ -33,11 +33,11 @@ public:
 
     string connect() override {
         return "Combining 2x 8-pin -> 12-pin (" +
-               to_string(cable1->getPower() + cable2->getPower()) + "W total)";
+               to_string(cable1->getPowerRating() + cable2->getPowerRating()) + "W total)";
     }
 
     int getPowerRating() const override {
-        return cable1->getPower() + cable2->getPower();
+        return cable1->getPowerRating() + cable2->getPowerRating();
     }
 
     ~DualPower8PinTo12PinAdapter() {

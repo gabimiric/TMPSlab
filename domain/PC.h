@@ -21,6 +21,7 @@ public:
     void addRAM(RAM *r) { ramModules.push_back(r); }
 
     string getName() const { return type; }
+    GPU* getGPU() const { return gpu; }
 
     // Validation methods for POST
     bool hasCPU() const { return !cpu.empty(); }
