@@ -1,6 +1,6 @@
 # Tehnici și mecanisme de proiectare software
 
-### Lab 1 - Design Patterns
+### Lab 2 - Structural Design Patterns
 
 ### Author: Gabriel Miricinschi
 
@@ -8,149 +8,217 @@
 
 ## Objectives:
 
-1. Study and understand the Creational Design Patterns.
-2. Choose a domain, define its main classes/models/entities and choose the appropriate instantiation mechanisms.
-3. Use some creational design patterns for object instantiation in a sample project.
+1. Study and understand the Structural Design Patterns.
+2. Extend the existing domain with structural patterns to improve code organization and flexibility.
+3. Implement at least 3 structural design patterns in the sample project.
 
 ## Used Design Patterns:
 
-1. Singleton - Ensures only one instance of a class exists and provides a global point of access to it.
-2. Builder - Separates the construction of a complex object from its representation, allowing step-by-step creation.
-3. Prototype - Creates new objects by copying existing ones, rather than instantiating from scratch.
+### Structural Patterns (Lab 2):
+1. **Adapter** - Converts one interface into another, allowing incompatible interfaces to work together.
+2. **Flyweight** - Reduces memory usage by sharing common data between similar objects.
+3. **Facade** - Provides a simplified interface to a complex subsystem.
 
 ## Implementation
 
-This project is a simulation of an Employee building PCs.
+This project extends the PC building simulation from Lab 1 with structural design patterns to handle compatibility issues, optimize memory usage, and simplify complex operations.
+
+### 1. Adapter Pattern - Power Cable Compatibility
+
+The **Adapter Pattern** solves the problem of incompatible power connectors. Modern high-end GPUs require 12-pin power connectors, but older PSUs only have 8-pin cables.
 
 ```c++
-class GPU {
-protected:
-    string model;
-    string cooler;
-    int vramGB;
-    int clockSpeedMHz;
-    int cores;
+// Target interface (12-pin)
+class Power12Pin {
 public:
-    GPU(const string& m, const string& c, int v, int clock, int cores) 
-        : model(m), cooler(c), vramGB(v), clockSpeedMHz(clock), cores(cores) {}
-    virtual ~GPU() = default;
-    virtual GPU* clone() const = 0;
-    virtual void show() const {
-        cout << "GPU: " << model 
-             << " | Cooler: " << cooler 
-             << " | VRAM: " << vramGB << "GB"
-             << " | Clock: " << clockSpeedMHz << " MHz"
-             << " | Cores: " << cores << endl;
-    }
-    void setCooler(const string& c) { cooler = c; }
-    void setVRAM(int v) { vramGB = v; }
-    void setClockSpeed(int clock) { clockSpeedMHz = clock; }
-    void setCores(int cores) { cores = cores; }
+    virtual ~Power12Pin() = default;
+    virtual string connect() = 0;
+    virtual int getPowerRating() const = 0;
 };
 
-class RTX3080 : public GPU {
-public:
-    RTX3080(const string& cooler = "Stock", int vram = 10, int clock = 1710, int cores = 8704)
-        : GPU("NVIDIA RTX 3080", cooler, vram, clock, cores) {}
-    RTX3080* clone() const override {
-        return new RTX3080(*this);
-    }
-};
-```
-
-The `GPU` classes are made through _Prototype Design Pattern_. I can add new GPUs that extend the base class, with `clone()` being the 
-method that clones a new object from an existing one.
-
-```c++
-class PCBuilder {
-protected:
-    PC* pc;
-public:
-    PCBuilder() : pc(nullptr) {}
-    virtual ~PCBuilder() {}
-    virtual void buildCPU() = 0;
-    virtual void buildGPU() = 0;
-    virtual void buildRAM() = 0;
-    PC* getPC() { return pc; }
-};
-class HighEndPCBuilder : public PCBuilder {
-public:
-    HighEndPCBuilder() { pc = new PC("Gaming PC"); }
-    void buildCPU() override { 
-        pc->setCPU("AMD Ryzen 7 9800X3D");
-    }
-    void buildGPU() override { 
-        RTX4090 prototypeGPU("Liquid Cooled", 24, 2600, 16384);
-        pc->setGPU(prototypeGPU.clone());
-    }
-    void buildRAM() override { 
-        pc->setRAM("64GB DDR5");
-    }
-};
-```
-
-The `PCBuilder` class is made through _Builder Design Pattern_. It is used to build a PC object step by step by implementing extensions 
-of the class that build different PCs with differing specifications.
-
-```c++
-class EmployeeManager {
+// Adaptee (8-pin)
+class Power8Pin {
 private:
-    static EmployeeManager* instance;
-    string name;
-    int pcsBuilt;
-    vector<string> buildLog;
-    EmployeeManager(const string& n) : name(n), pcsBuilt(0) {
-        cout << "[System] Employee Manager " << name << " has started their shift.\n";
-    }
+    int powerRating;
 public:
-    EmployeeManager(const EmployeeManager&) = delete;
-    EmployeeManager& operator=(const EmployeeManager&) = delete;
-    static EmployeeManager* getInstance(const string& n = "Default Manager") {
-        if (instance == nullptr) {
-            instance = new EmployeeManager(n);
-        }
-        return instance;
+    Power8Pin(int powerRating) : powerRating(powerRating) {}
+    string connect8Pin() {
+        return "8-pin connector (" + to_string(powerRating) + "W)";
     }
-    //Other public methods
-}
+    int getPowerRating() const { return powerRating; }
+};
+
+// ADAPTER: Converts two 8-pin to 12-pin
+class DualPower8PinTo12PinAdapter : public Power12Pin {
+private:
+    Power8Pin* cable1;
+    Power8Pin* cable2;
+public:
+    DualPower8PinTo12PinAdapter(Power8Pin* c1, Power8Pin* c2)
+        : cable1(c1), cable2(c2) {}
+
+    string connect() override {
+        return "Combining 2x 8-pin -> 12-pin (" +
+               to_string(cable1->getPowerRating() + cable2->getPowerRating()) + "W total)";
+    }
+
+    int getPowerRating() const override {
+        return cable1->getPowerRating() + cable2->getPowerRating();
+    }
+};
 ```
 
-Lastly, the `EmployeeManager` class is made through _Singleton Design Pattern_. It is a simulation of an employee/manager that can build PCs and
-can only have one instance at a time.
+The adapter allows two 8-pin cables to be combined into a single 12-pin connection, providing enough power for modern GPUs while maintaining compatibility with older power supplies.
+
+### 2. Flyweight Pattern - RAM Specification Sharing
+
+The **Flyweight Pattern** optimizes memory usage when dealing with multiple RAM modules that share common specifications (DDR type, transfer rate, CL rating).
+
+```c++
+// Intrinsic state (shared)
+class RAMSpec {
+private:
+    string ddrType;
+    int transferRate;
+    int clRating;
+public:
+    RAMSpec(const string& ddrType, int transferRate, int clRating)
+        : ddrType(ddrType), transferRate(transferRate), clRating(clRating) {}
+    
+    string getDDRType() const { return ddrType; }
+    int getTransferRate() const { return transferRate; }
+    int getCLRating() const { return clRating; }
+};
+
+// Extrinsic state (unique per module)
+class RAM {
+private:
+    shared_ptr<RAMSpec> specs;  // Shared flyweight
+    int capacityGB;
+    string brand;
+public:
+    RAM(shared_ptr<RAMSpec> specs, int capacityGB, const string& brand)
+        : specs(specs), capacityGB(capacityGB), brand(brand) {}
+    
+    void showInfo() const {
+        cout << "  " << brand << " " << capacityGB << "GB "
+             << specs->getDDRType() << "-" << specs->getTransferRate()
+             << " CL" << specs->getCLRating() << endl;
+    }
+};
+
+// Flyweight Factory
+class RAMSpecFactory {
+private:
+    map<string, shared_ptr<RAMSpec>> specPool;
+public:
+    shared_ptr<RAMSpec> getRAMSpec(const string& ddrType, int transferRate, int clRating) {
+        string key = ddrType + "_" + to_string(transferRate) + "_" + to_string(clRating);
+        
+        if (specPool.find(key) == specPool.end()) {
+            specPool[key] = make_shared<RAMSpec>(ddrType, transferRate, clRating);
+        }
+        return specPool[key];
+    }
+};
+```
+
+Multiple RAM modules with the same specifications (e.g., DDR5-6000 CL30) share a single `RAMSpec` object, reducing memory overhead when building systems with multiple identical RAM sticks.
+
+### 3. Facade Pattern - Simplified PC Diagnostics
+
+The **Facade Pattern** provides a simplified interface to the complex subsystems involved in PC testing: BIOS operations, hardware monitoring, and diagnostic logging.
+
+```c++
+// Subsystem 1: BIOS operations
+class BIOSSystem {
+public:
+    bool runPOST(PC* pc) {
+        // Power-On Self-Test checks
+        bool cpuPresent = pc->hasCPU();
+        bool ramPresent = pc->hasRAM();
+        return cpuPresent && ramPresent;
+    }
+    void initializePower() { /* ... */ }
+};
+
+// Subsystem 2: Hardware monitoring
+class HardwareMonitor {
+public:
+    void checkTemperatures(bool hasGPU) { /* ... */ }
+    void runStressTest(bool hasGPU) { /* ... */ }
+};
+
+// Subsystem 3: Diagnostic logger
+class DiagnosticLogger {
+public:
+    void generateReport(const string& pcName, bool healthy) { /* ... */ }
+};
+
+// FACADE: Simplifies complex diagnostic operations
+class PCTesting {
+private:
+    PC* pc;
+    BIOSSystem bios;
+    HardwareMonitor hwMonitor;
+    DiagnosticLogger logger;
+public:
+    PCTesting(PC* pc) : pc(pc) {}
+    
+    void runFullDiagnostics() {
+        // Single method coordinates all subsystems
+        bios.initializePower();
+        if (!bios.runPOST(pc)) return;
+        hwMonitor.runStressTest(pc->hasGPU());
+        hwMonitor.checkTemperatures(pc->hasGPU());
+        logger.generateReport(pc->getName(), true);
+    }
+};
+```
+
+Instead of interacting with multiple complex subsystems, clients can simply call `runFullDiagnostics()` to perform a complete PC test.
+
+## Testing & Results
+
+The main program demonstrates all three structural patterns in action:
 
 ```c++
 int main() {
-    cout << "=== Design Patterns Demo ===" << endl;
-    EmployeeManager* manager = EmployeeManager::getInstance("Alice Johnson");
-    manager->showInfo();
-    EmployeeManager* manager1 = EmployeeManager::getInstance("Bob Smith");
-    manager1->showInfo();
-    cout << "\n[PROTOTYPE PATTERN]" << endl;
-    RTX3080 baseGPU("Stock", 10, 1710, 8704);
-    RTX3080* customGPU = baseGPU.clone();
-    customGPU->setCooler("Water Cooled");
-    customGPU->setClockSpeed(1950);
-    manager->validateGPU(customGPU);
-    delete customGPU;
-    cout << "\n[BUILDER PATTERN]" << endl;
+    // Build a gaming PC using creational patterns from Lab 1
     Director director;
     HighEndPCBuilder builder;
-    PC* gamingPC = manager->buildPC(director, builder, "Full");
-    gamingPC->showSpecs();
-    manager->showBuildSummary();
+    director.constructFullPC(builder);
+    PC* gamingPC = builder.getPC();
+    
+    // ADAPTER PATTERN: Power cable compatibility
+    cout << "\n--- ADAPTER PATTERN ---" << endl;
+    Power8Pin* cable1 = new Power8Pin(300);
+    Power8Pin* cable2 = new Power8Pin(300);
+    Power12Pin* adapter = new DualPower8PinTo12PinAdapter(cable1, cable2);
+    
+    cout << adapter->connect() << endl;
+    cout << "Total power available: " << adapter->getPowerRating() << "W" << endl;
+    
+    // FLYWEIGHT PATTERN: Shared RAM specifications
+    cout << "\n--- FLYWEIGHT PATTERN ---" << endl;
+    RAMSpecFactory specFactory;
+    auto ddr5_6000_cl30 = specFactory.getRAMSpec("DDR5", 6000, 30);
+    
+    RAM ram1(ddr5_6000_cl30, 16, "Corsair");
+    RAM ram2(ddr5_6000_cl30, 16, "Kingston");
+    gamingPC->addRAM(&ram1);
+    gamingPC->addRAM(&ram2);
+    
+    cout << "Total RAM modules: " << gamingPC->getRAMModuleCount() << endl;
+    cout << "Unique specs in pool: " << specFactory.getPoolSize() << endl;
+    
+    // FACADE PATTERN: Simplified PC testing
+    cout << "\n--- FACADE PATTERN ---" << endl;
+    PCTesting tester(gamingPC);
+    tester.runFullDiagnostics();
+    
     delete gamingPC;
+    delete adapter;
     return 0;
 }
 ```
-
-This is the `main` code used for testing. It shows the Singleton, Prototype and Builder design patterns in action.
-
-The **Singleton** test will show that the manager can only have one instance at a time. 
-
-The **Prototype** test will show that the GPU can be cloned and modified. 
-
-The **Builder** test will show that the PC can be built step by step.
-
-## Results & Screenshots
-
-<img width="731" height="750" alt="Image" src="https://github.com/user-attachments/assets/f1452904-e9ec-4155-91e7-bb4afbedb37c" />
