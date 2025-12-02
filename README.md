@@ -1,224 +1,105 @@
 # Tehnici și mecanisme de proiectare software
 
-### Lab 2 - Structural Design Patterns
+### Lab 3 - Behavioral Design Patterns
 
 ### Author: Gabriel Miricinschi
 
 ------
 
-## Objectives:
+## Objectives
 
-1. Study and understand the Structural Design Patterns.
-2. Extend the existing domain with structural patterns to improve code organization and flexibility.
-3. Implement at least 3 structural design patterns in the sample project.
+1. Study and understand Behavioral Design Patterns.
+2. Implement at least 3 behavioral design patterns in the sample project.
 
-## Used Design Patterns:
+## Implemented Behavioral Patterns
 
-### Structural Patterns (Lab 2):
-1. **Adapter** - Converts one interface into another, allowing incompatible interfaces to work together.
-2. **Flyweight** - Reduces memory usage by sharing common data between similar objects.
-3. **Facade** - Provides a simplified interface to a complex subsystem.
+In this lab the domain was refactored around an **auction** scenario. The following behavioral patterns are used:
 
-## Implementation
+1. **Observer** – keeps the auction logic separate from the UI by sending event updates.
+2. **Strategy** – encapsulates multiple bid-sorting algorithms and allows switching them at runtime.
+3. **Chain of Responsibility** – builds a configurable pipeline that validates bids step by step.
 
-This project extends the PC building simulation from Lab 1 with structural design patterns to handle compatibility issues, optimize memory usage, and simplify complex operations.
+Below is a short description of how each pattern appears in the code.
 
-### 1. Adapter Pattern - Power Cable Compatibility
+### 1. Observer Pattern – Live Auction Updates
 
-The **Adapter Pattern** solves the problem of incompatible power connectors. Modern high-end GPUs require 12-pin power connectors, but older PSUs only have 8-pin cables.
+**Intent:** Notify multiple views/observers when the auction state changes, without the `Auctioneer` knowing who is listening.
 
-```c++
-// Target interface (12-pin)
-class Power12Pin {
-public:
-    virtual ~Power12Pin() = default;
-    virtual string connect() = 0;
-    virtual int getPowerRating() const = 0;
-};
+**Key classes (in `domain/Auctioneer.hpp` and `domain/AuctionObservers.hpp`):**
 
-// Adaptee (8-pin)
-class Power8Pin {
-private:
-    int powerRating;
-public:
-    Power8Pin(int powerRating) : powerRating(powerRating) {}
-    string connect8Pin() {
-        return "8-pin connector (" + to_string(powerRating) + "W)";
-    }
-    int getPowerRating() const { return powerRating; }
-};
+- `Observer` – interface with two callbacks:
+  - `onBidPlaced(const BidPlacedEvent&)`
+  - `onAuctionEnded(const AuctionEndedEvent&)`
+- `Subject` – base class that manages a list of observers and provides:
+  - `attach`, `detach` and notification methods (`notifyBidPlaced`, `notifyAuctionEnded`).
+- `Auctioneer` – derives from `Subject` and represents the core auction controller:
+  - Validates and accepts bids.
+  - Emits `BidPlacedEvent` and `AuctionEndedEvent` to all attached observers.
+- `LeaderboardObserver` – concrete observer that prints a textual leaderboard to the console:
+  - Receives full event data (push model) and does not query `Auctioneer` directly.
+  - Uses the current sorting strategy to order bidders before displaying them.
 
-// ADAPTER: Converts two 8-pin to 12-pin
-class DualPower8PinTo12PinAdapter : public Power12Pin {
-private:
-    Power8Pin* cable1;
-    Power8Pin* cable2;
-public:
-    DualPower8PinTo12PinAdapter(Power8Pin* c1, Power8Pin* c2)
-        : cable1(c1), cable2(c2) {}
+### 2. Strategy Pattern – Pluggable Sorting Algorithms
 
-    string connect() override {
-        return "Combining 2x 8-pin -> 12-pin (" +
-               to_string(cable1->getPowerRating() + cable2->getPowerRating()) + "W total)";
-    }
+**Intent:** Define a family of algorithms, encapsulate each one, and make them interchangeable at runtime.
 
-    int getPowerRating() const override {
-        return cable1->getPowerRating() + cable2->getPowerRating();
-    }
-};
-```
+**Key classes (in `domain/SortingAlgorithms.hpp`):**
 
-The adapter allows two 8-pin cables to be combined into a single 12-pin connection, providing enough power for modern GPUs while maintaining compatibility with older power supplies.
+- `SortStrategy` – strategy interface:
+  - `sort(vector<shared_ptr<Bid>>& bids)` sorts bids in-place.
+  - `getName()` returns a human-readable algorithm name.
+- `QuickSort`, `MergeSort`, `InsertionSort` – concrete strategies implementing different sorting algorithms
+  that all sort **descending by bid amount**.
+- `BidSorter` – context class that holds a `SortStrategy` and delegates `sortBids` to it.
 
-### 2. Flyweight Pattern - RAM Specification Sharing
+**Usage (in `client/main.cpp` and `LeaderboardObserver`):**
 
-The **Flyweight Pattern** optimizes memory usage when dealing with multiple RAM modules that share common specifications (DDR type, transfer rate, CL rating).
+- `LeaderboardObserver` receives a `shared_ptr<SortStrategy>` and uses it to sort active bidders
+  before printing the leaderboard.
+- In `main`, the same `BidSorter` instance is reused to demonstrate runtime strategy switching:
+  - Start with `QuickSort`.
+  - Switch to `MergeSort`.
+  - Switch to `InsertionSort`.
 
-```c++
-// Intrinsic state (shared)
-class RAMSpec {
-private:
-    string ddrType;
-    int transferRate;
-    int clRating;
-public:
-    RAMSpec(const string& ddrType, int transferRate, int clRating)
-        : ddrType(ddrType), transferRate(transferRate), clRating(clRating) {}
-    
-    string getDDRType() const { return ddrType; }
-    int getTransferRate() const { return transferRate; }
-    int getCLRating() const { return clRating; }
-};
+### 3. Chain of Responsibility – Bid Validation Pipeline
 
-// Extrinsic state (unique per module)
-class RAM {
-private:
-    shared_ptr<RAMSpec> specs;  // Shared flyweight
-    int capacityGB;
-    string brand;
-public:
-    RAM(shared_ptr<RAMSpec> specs, int capacityGB, const string& brand)
-        : specs(specs), capacityGB(capacityGB), brand(brand) {}
-    
-    void showInfo() const {
-        cout << "  " << brand << " " << capacityGB << "GB "
-             << specs->getDDRType() << "-" << specs->getTransferRate()
-             << " CL" << specs->getCLRating() << endl;
-    }
-};
+**Intent:** Avoid coupling the sender of a request to its receiver by passing the request along a chain of
+handlers until one of them handles it (or they all approve it).
 
-// Flyweight Factory
-class RAMSpecFactory {
-private:
-    map<string, shared_ptr<RAMSpec>> specPool;
-public:
-    shared_ptr<RAMSpec> getRAMSpec(const string& ddrType, int transferRate, int clRating) {
-        string key = ddrType + "_" + to_string(transferRate) + "_" + to_string(clRating);
-        
-        if (specPool.find(key) == specPool.end()) {
-            specPool[key] = make_shared<RAMSpec>(ddrType, transferRate, clRating);
-        }
-        return specPool[key];
-    }
-};
-```
+**Key classes (in `domain/BidValidation.hpp`):**
 
-Multiple RAM modules with the same specifications (e.g., DDR5-6000 CL30) share a single `RAMSpec` object, reducing memory overhead when building systems with multiple identical RAM sticks.
+- `BidValidator` – abstract base handler in the chain:
+  - Holds a pointer to `next`.
+  - Exposes `setNext` and a virtual `validate(...)` function.
+- `TrustedBidderValidator` – first handler in the chain:
+  - Rejects bids from untrusted bidders.
+- `MinimumBidValidator` – second handler:
+  - Ensures the new bid is strictly higher than the current highest (or minimum) bid.
+- `IncrementValidator` – third handler:
+  - Enforces that the bid is a valid multiple of the configured increment.
+- `BidValidationChain` – convenience class that wires the concrete validators together in order and exposes
+  a single `validateBid(...)` method.
 
-### 3. Facade Pattern - Simplified PC Diagnostics
+**Usage (in `Auctioneer::attemptBid`)**
 
-The **Facade Pattern** provides a simplified interface to the complex subsystems involved in PC testing: BIOS operations, hardware monitoring, and diagnostic logging.
+- Before a bid is accepted, `Auctioneer` calls `validator->validateBid(...)`.
+- If any validator rejects the bid, the chain stops and a detailed textual reason is returned to the caller.
+- Only when all validators approve, `Auctioneer::placeBid` is invoked and observers are notified.
 
-```c++
-// Subsystem 1: BIOS operations
-class BIOSSystem {
-public:
-    bool runPOST(PC* pc) {
-        // Power-On Self-Test checks
-        bool cpuPresent = pc->hasCPU();
-        bool ramPresent = pc->hasRAM();
-        return cpuPresent && ramPresent;
-    }
-    void initializePower() { /* ... */ }
-};
+## Code Structure Overview
 
-// Subsystem 2: Hardware monitoring
-class HardwareMonitor {
-public:
-    void checkTemperatures(bool hasGPU) { /* ... */ }
-    void runStressTest(bool hasGPU) { /* ... */ }
-};
+The project is split into the following main areas:
 
-// Subsystem 3: Diagnostic logger
-class DiagnosticLogger {
-public:
-    void generateReport(const string& pcName, bool healthy) { /* ... */ }
-};
+- `client/main.cpp` – Demo entry point:
+  - Sets up the auction item, `Auctioneer`, bidders, and `LeaderboardObserver`.
+  - Runs a multi-threaded auction simulation using `AuctionSimulator`.
+  - Demonstrates Strategy switching by sorting the same set of bids with each algorithm.
+- `domain/models/AuctionModels.hpp` – Core models:
+  - `Bid`, `Bidder`, `AuctionItem`.
+- `domain/Auctioneer.hpp` – Auction controller, events, and Observer base types.
+- `domain/AuctionObservers.hpp` – `LeaderboardObserver` implementation.
+- `domain/SortingAlgorithms.hpp` – Strategy interface and concrete sorting strategies.
+- `domain/BidValidation.hpp` – Chain of Responsibility for validating bids.
+- `domain/AuctionSimulator.hpp` – Multi-threaded simulation for bidders and auction timeout.
+- `domain/factory/BidderFactory.hpp` – Helper for creating many bidders with random trusted status.
 
-// FACADE: Simplifies complex diagnostic operations
-class PCTesting {
-private:
-    PC* pc;
-    BIOSSystem bios;
-    HardwareMonitor hwMonitor;
-    DiagnosticLogger logger;
-public:
-    PCTesting(PC* pc) : pc(pc) {}
-    
-    void runFullDiagnostics() {
-        // Single method coordinates all subsystems
-        bios.initializePower();
-        if (!bios.runPOST(pc)) return;
-        hwMonitor.runStressTest(pc->hasGPU());
-        hwMonitor.checkTemperatures(pc->hasGPU());
-        logger.generateReport(pc->getName(), true);
-    }
-};
-```
-
-Instead of interacting with multiple complex subsystems, clients can simply call `runFullDiagnostics()` to perform a complete PC test.
-
-## Testing & Results
-
-The main program demonstrates all three structural patterns in action:
-
-```c++
-int main() {
-    // Build a gaming PC using creational patterns from Lab 1
-    Director director;
-    HighEndPCBuilder builder;
-    director.constructFullPC(builder);
-    PC* gamingPC = builder.getPC();
-    
-    // ADAPTER PATTERN: Power cable compatibility
-    cout << "\n--- ADAPTER PATTERN ---" << endl;
-    Power8Pin* cable1 = new Power8Pin(300);
-    Power8Pin* cable2 = new Power8Pin(300);
-    Power12Pin* adapter = new DualPower8PinTo12PinAdapter(cable1, cable2);
-    
-    cout << adapter->connect() << endl;
-    cout << "Total power available: " << adapter->getPowerRating() << "W" << endl;
-    
-    // FLYWEIGHT PATTERN: Shared RAM specifications
-    cout << "\n--- FLYWEIGHT PATTERN ---" << endl;
-    RAMSpecFactory specFactory;
-    auto ddr5_6000_cl30 = specFactory.getRAMSpec("DDR5", 6000, 30);
-    
-    RAM ram1(ddr5_6000_cl30, 16, "Corsair");
-    RAM ram2(ddr5_6000_cl30, 16, "Kingston");
-    gamingPC->addRAM(&ram1);
-    gamingPC->addRAM(&ram2);
-    
-    cout << "Total RAM modules: " << gamingPC->getRAMModuleCount() << endl;
-    cout << "Unique specs in pool: " << specFactory.getPoolSize() << endl;
-    
-    // FACADE PATTERN: Simplified PC testing
-    cout << "\n--- FACADE PATTERN ---" << endl;
-    PCTesting tester(gamingPC);
-    tester.runFullDiagnostics();
-    
-    delete gamingPC;
-    delete adapter;
-    return 0;
-}
-```
